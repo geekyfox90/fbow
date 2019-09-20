@@ -53,6 +53,8 @@ struct FBOW_API fBow2:std::map<uint32_t,std::vector<uint32_t>> {
  */
 class FBOW_API Vocabulary
 {
+
+
  static inline void * AlignedAlloc(int __alignment,int size){
      assert(__alignment<256);
 
@@ -70,27 +72,23 @@ class FBOW_API Vocabulary
      *(ptr-1)=(unsigned char)off; //save in prev, the offset  to properly remove it
      return ptr;
  }
-  
      static inline void AlignedFree(void *ptr){
-         if(ptr==nullptr)return;
          unsigned char *uptr=(unsigned char *)ptr;
          unsigned char off= *(uptr-1);
          uptr-=off;
          std::free(uptr);
      }
-  
- // using Data_ptr = std::unique_ptr<char[], decltype(&AlignedFree)>;
-
     friend class VocabularyCreator;
-
  public:
 
-    Vocabulary(): _data((char*)nullptr,&AlignedFree){}
-    Vocabulary(Vocabulary&&) = default;
+    ~Vocabulary();
 
-    //transform the features stored as rows in the returned BagOfWords
+    //transform the features stored as rows and return a FBoW
     fBow transform(const cv::Mat &features);
+	//transform the features stored as rows and return a FBoW and a FBoW2
     void transform(const cv::Mat &features, int level,fBow &result,fBow2&result2);
+	//transform a feature return index of node
+	int transform(const cv::Mat &feature, int level);
 
 
     //loads/saves from a file
@@ -106,9 +104,9 @@ class FBOW_API Vocabulary
     //returns the descriptor name
     std::string getDescName() const{ return _params._desc_name_;}
     //returns the branching factor (number of children per node)
-    uint32_t getK()const{return _params._m_k;}
+    uint32_t getK()const{return _params._m_k;}	
     //indicates whether this object is valid
-    bool isValid()const{return _data.get()!=nullptr;}
+    bool isValid()const{return _data!=0;}
     //total number of blocks
     size_t size()const{return _params._nblocks;}
     //removes all data
@@ -117,7 +115,7 @@ class FBOW_API Vocabulary
     uint64_t hash()const;
 
 private:
-     void  setParams(  int aligment,int k,int desc_type,int desc_size, int nblocks,std::string desc_name) ;
+     void  setParams(  int aligment,int k,int desc_type,int desc_size, int nblocks,std::string desc_name)throw(std::runtime_error);
     struct params{
         char _desc_name_[50];//descriptor name. May be empty
         uint32_t _aligment=0,_nblocks=0 ;//memory aligment and total number of blocks
@@ -130,8 +128,7 @@ private:
         uint32_t _m_k=0;//number of children per node
     };
     params _params;
-    std::unique_ptr<char[], decltype(&AlignedFree)> _data;
-
+    char * _data=0;//pointer to data
 
     //structure represeting a information about node in a block
     struct block_node_info{
@@ -196,9 +193,9 @@ private:
 
 
     //returns a block structure pointing at block b
-    inline Block getBlock(uint32_t b) { assert(_data.get() != nullptr); assert(b < _params._nblocks); return Block(_data.get() + b * _params._block_size_bytes_wp, _params._desc_size, _params._desc_size_bytes_wp, _params._feature_off_start, _params._child_off_start); }
+    inline Block getBlock(uint32_t b){assert( _data!=0);assert(b<_params._nblocks); return Block( _data+ b*_params._block_size_bytes_wp,_params._desc_size, _params._desc_size_bytes_wp,_params._feature_off_start, _params._child_off_start);}
     //given a block already create with getBlock, moves it to point to block b
-    inline void setBlock(uint32_t b, Block &block) { block._blockstart = _data.get() + b * _params._block_size_bytes_wp; }
+    inline void setBlock(uint32_t b,Block &block){ block._blockstart= _data+ b*_params._block_size_bytes_wp;}
 
     //information about the cpu so that mmx,sse or avx extensions can be employed
     std::shared_ptr<cpu> cpu_info;
@@ -217,14 +214,14 @@ private:
         int _block_desc_size_bytes_wp;
         register_type *feature=0;
     public:
-        virtual ~Lx(){if (feature!=0)AlignedFree(feature);}
+         ~Lx(){if (feature!=0)AlignedFree(feature);}
         void setParams(int desc_size, int block_desc_size_bytes_wp){
             assert(block_desc_size_bytes_wp%aligment==0);
             _desc_size=desc_size;
             _block_desc_size_bytes_wp=block_desc_size_bytes_wp;
             assert(_block_desc_size_bytes_wp%sizeof(register_type )==0);
             _nwords=_block_desc_size_bytes_wp/sizeof(register_type );//number of aligned words
-            feature=static_cast<register_type*> (AlignedAlloc(aligment,_nwords*sizeof(register_type )));
+            feature=(register_type*)AlignedAlloc(aligment,_nwords*sizeof(register_type ));
            memset(feature,0,_nwords*sizeof(register_type ));
         }
         inline void startwithfeature(const register_type *feat_ptr){memcpy(feature,feat_ptr,_desc_size);}
@@ -234,7 +231,7 @@ private:
 
 
     struct L2_generic:public Lx<float,float,4>{
-        virtual ~L2_generic(){ }
+         ~L2_generic(){ }
         inline float computeDist(float *fptr){
             float d=0;
             for(int f=0;f<_nwords;f++)  d+=  (feature[f]-fptr[f])*(feature[f]-fptr[f]);
@@ -253,7 +250,6 @@ private:
 
 #else
     struct L2_avx_generic:public Lx<__m256,float,32>{
-        virtual ~L2_avx_generic(){}
         inline float computeDist(__m256 *ptr){
              __m256 sum=_mm256_setzero_ps(), sub_mult;
             //substract, multiply and accumulate
@@ -443,6 +439,52 @@ private:
                   }while( !bn_info->isleaf() && bn_info->getId()!=0);
               }
       }
+
+
+	 // Transform a feature to find its corresponding node in the BoW
+	 template<typename Computer>
+	 int  _transform3(const cv::Mat &feature, uint32_t storeLevel) {
+		Computer comp;
+		comp.setParams(_params._desc_size, _params._desc_size_bytes_wp);
+		using DType = typename Computer::DType;//distance type
+		using TData = typename Computer::TData;//data type
+
+		std::pair<DType, uint32_t> best_dist_idx(std::numeric_limits<uint32_t>::max(), 0);//minimum distance found
+		block_node_info *bn_info;
+		int nbits = ceil(log2(_params._m_k));
+
+		comp.startwithfeature(feature.ptr<TData>(0));
+		//ensure feature is in a
+		Block c_block = getBlock(0);
+		uint32_t level = 0;//current level of recursion
+		uint32_t curNode = 0;//id of the current node of the tree
+		//copy to another structure and add padding with zeros
+
+		do {
+			if (level == storeLevel)//if reached level,save
+				return curNode;
+
+			//given the current block, finds the node with minimum distance
+			best_dist_idx.first = std::numeric_limits<uint32_t>::max();
+			for (int cur_node = 0; cur_node < c_block.getN(); cur_node++)
+			{
+				DType d = comp.computeDist(c_block.getFeature<TData>(cur_node));
+				if (d < best_dist_idx.first) best_dist_idx = std::make_pair(d, cur_node);
+			}				 
+
+			bn_info = c_block.getBlockNodeInfo(best_dist_idx.second);
+			//if the node is leaf get weight,else go to its children
+			if (bn_info->isleaf()) {
+				if (level < storeLevel)//store level not reached, save now
+					return curNode;
+			}
+			else setBlock(bn_info->getId(), c_block);//go to its children
+			curNode = curNode << nbits;
+			curNode |= best_dist_idx.second;
+			level++;
+		} while (!bn_info->isleaf() && bn_info->getId() != 0);
+
+	 }
 
 };
 

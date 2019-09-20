@@ -7,7 +7,13 @@
 
 namespace fbow{
 
-void Vocabulary::setParams(int aligment, int k, int desc_type, int desc_size, int nblocks, std::string desc_name) {
+
+Vocabulary::~Vocabulary(){
+    if (_data!=0) AlignedFree( _data);
+}
+
+
+void Vocabulary::setParams(int aligment, int k, int desc_type, int desc_size, int nblocks, std::string desc_name)throw(std::runtime_error){
     auto ns= desc_name.size()<static_cast<size_t>(49)?desc_name.size():128;
     desc_name.resize(ns);
 
@@ -42,9 +48,8 @@ void Vocabulary::setParams(int aligment, int k, int desc_type, int desc_size, in
 
     //give memory
     _params._total_size=_params._block_size_bytes_wp*_params._nblocks;
-    _data = std::unique_ptr<char[], decltype(&AlignedFree)>((char*)AlignedAlloc(_params._aligment, _params._total_size), &AlignedFree);
-
-    memset(_data.get(), 0, _params._total_size);
+    _data=(char*)AlignedAlloc(_params._aligment,_params._total_size);
+    memset( _data,0,_params._total_size);
 
 }
 
@@ -87,6 +92,59 @@ void Vocabulary::transform(const cv::Mat &features, int level,fBow &result,fBow2
     }
     else throw std::runtime_error("Vocabulary::transform invalid feature type. Should be CV_8UC1 or CV_32FC1");
 
+	///now, normalize
+	//L2
+	double norm = 0;
+	for (auto e : result) norm += e.second * e.second;
+
+	if (norm > 0.0)
+	{
+		double inv_norm = 1. / sqrt(norm);
+		for (auto &e : result) e.second *= inv_norm;
+	}
+}
+
+int Vocabulary::transform(const cv::Mat & feature, int level)
+{
+	if (feature.rows == 0) throw std::runtime_error("Vocabulary::transform No input data");
+	if (feature.type() != _params._desc_type) throw std::runtime_error("Vocabulary::transform features are of different type than vocabulary");
+	if (feature.cols *  feature.elemSize() != size_t(_params._desc_size)) throw std::runtime_error("Vocabulary::transform features are of different size than the vocabulary ones");
+
+	//get host info to decide the version to execute
+	if (!cpu_info) {
+		cpu_info = std::make_shared<cpu>();
+		cpu_info->detect_host();
+	}
+
+	//decide the version to employ according to the type of features, aligment and cpu capabilities
+	if (_params._desc_type == CV_8UC1) {
+		//orb
+		if (cpu_info->HW_x64) {
+			if (_params._desc_size == 32)
+				return _transform3<L1_32bytes>(feature, level);
+			//full akaze
+			else if (_params._desc_size == 61 && _params._aligment % 8 == 0)
+				return _transform3<L1_61bytes>(feature, level);
+			//generic
+			else
+				return _transform3<L1_x64>(feature, level);
+		}
+		else  return _transform3<L1_x32>(feature, level);
+	}
+	else if (feature.type() == CV_32FC1) {
+		if (cpu_info->isSafeAVX() && _params._aligment % 32 == 0) { //AVX version
+			if (_params._desc_size == 256) return _transform3<L2_avx_8w>(feature, level);//specific for surf 256 bytes
+			else return _transform3<L2_avx_generic>(feature, level);//any other
+		}
+		if (cpu_info->isSafeSSE() && _params._aligment % 16 == 0) {//SSE version
+			if (_params._desc_size == 256) return _transform3<L2_sse3_16w>(feature, level);//specific for surf 256 bytes
+			else return _transform3<L2_se3_generic>(feature, level);//any other
+		}
+		//generic version
+		return _transform3<L2_generic>(feature, level);
+	}
+	else throw std::runtime_error("Vocabulary::transform invalid feature type. Should be CV_8UC1 or CV_32FC1");
+	return 0;
 }
 
 fBow Vocabulary::transform(const cv::Mat &features)
@@ -147,7 +205,8 @@ fBow Vocabulary::transform(const cv::Mat &features)
 
 void Vocabulary::clear()
 {
-    _data.reset();
+    if (_data!=0) AlignedFree(_data);
+    _data=0;
     memset(&_params,0,sizeof(_params));
     _params._desc_name_[0]='\0';
 }
@@ -174,19 +233,20 @@ void Vocabulary::toStream(std::ostream &str)const{
     str.write((char*)&sig,sizeof(sig));
     //save string
     str.write((char*)&_params,sizeof(params));
-    str.write(_data.get(), _params._total_size);
+    str.write(_data,_params._total_size);
 }
 
 void Vocabulary::fromStream(std::istream &str)
 {
+    if (_data!=0) AlignedFree (_data);
     uint64_t sig;
     str.read((char*)&sig,sizeof(sig));
     if (sig!=55824124) throw std::runtime_error("Vocabulary::fromStream invalid signature");
     //read string
     str.read((char*)&_params,sizeof(params));
-    _data = std::unique_ptr<char[], decltype(&AlignedFree)>((char*)AlignedAlloc(_params._aligment, _params._total_size), &AlignedFree);
-    if (_data.get() == nullptr) throw std::runtime_error("Vocabulary::fromStream Could not allocate data");
-    str.read(_data.get(), _params._total_size);
+    _data=(char*)AlignedAlloc(_params._aligment,_params._total_size);
+    if (_data==0) throw std::runtime_error("Vocabulary::fromStream Could not allocate data");
+    str.read(_data,_params._total_size);
 }
 
 double fBow::score (const  fBow &v1,const fBow &v2){
@@ -255,7 +315,7 @@ uint64_t Vocabulary::hash()const{
 
     uint64_t seed = 0;
     for(uint64_t i=0;i<_params._total_size;i++)
-        seed^= _data.get()[i] + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed^= _data[i] + 0x9e3779b9 + (seed << 6) + (seed >> 2);
     return seed;
 }
 void fBow::toStream(std::ostream &str) const   {

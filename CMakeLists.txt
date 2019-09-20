@@ -53,9 +53,14 @@ option(FBOW_DEVINSTALL 	"Set to OFF to disable source installation" ON)
 # ----------------------------------------------------------------------------
 #   Find Dependencies
 # ----------------------------------------------------------------------------
-find_package(OpenCV  REQUIRED)
-INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
-MESSAGE("OPENCVINCDIR=${OpenCV_INCLUDE_DIRS}")
+#find_package(OpenCV  REQUIRED)
+#set(OpenCV_DIR D:/Bcom/Opencv/opencv3.4.3/opencv/build)
+#INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
+#MESSAGE("OPENCVINCDIR=${OpenCV_INCLUDE_DIRS}")
+#MESSAGE("OPENCVLIBS=${OpenCV_LIBS}")
+INCLUDE_DIRECTORIES("$ENV{BCOMDEVROOT}/thirdParties/opencv/3.4.3/interfaces")
+set (BUILDCONFIG $<$<CONFIG:Debug>:debug>$<$<NOT:$<CONFIG:Debug>>:release>)
+set (OpenCV_LIB_DIR "$ENV{BCOMDEVROOT}/thirdParties/opencv/3.4.3/lib/x86_64/shared/${BUILDCONFIG}")
 
 IF(USE_CONTRIB)
 add_definitions(-DUSE_CONTRIB)

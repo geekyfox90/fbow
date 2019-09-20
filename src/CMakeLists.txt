@@ -15,7 +15,7 @@ SET_TARGET_PROPERTIES(${THIS_LIBNAME} PROPERTIES 				# create *nix style library
         CLEAN_DIRECT_OUTPUT 1 					# allow creating static and shared libs without conflicts
         OUTPUT_NAME "${THIS_LIBNAME}${PROJECT_DLLVERSION}" 	# avoid conflicts between library and binary target names
 )
-TARGET_LINK_LIBRARIES(${THIS_LIBNAME} ${OpenCV_LIBS} ${OpenMP_CXX_LIBRARIES})
+TARGET_LINK_LIBRARIES(${THIS_LIBNAME} ${OpenCV_LIB_DIR}/opencv_world343.lib ${OpenMP_CXX_LIBRARIES})
 
 INSTALL(TARGETS ${THIS_LIBNAME}
         RUNTIME DESTINATION bin COMPONENT main			# Install the dll file in bin directory
