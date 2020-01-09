@@ -13,7 +13,7 @@ VERSION=0.0.1
 
 DEFINES += MYVERSION=$${VERSION}
 DEFINES += TEMPLATE_LIBRARY
-CONFIG += c++1y
+CONFIG += c++1z
 
 
 CONFIG(debug,debug|release) {
