@@ -115,7 +115,7 @@ class FBOW_API Vocabulary
     uint64_t hash()const;
 
 private:
-     void  setParams(  int aligment,int k,int desc_type,int desc_size, int nblocks,std::string desc_name)throw(std::runtime_error);
+     void  setParams(  int aligment,int k,int desc_type,int desc_size, int nblocks,std::string desc_name) noexcept(false);
     struct params{
         char _desc_name_[50];//descriptor name. May be empty
         uint32_t _aligment=0,_nblocks=0 ;//memory aligment and total number of blocks
