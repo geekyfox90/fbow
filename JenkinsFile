@@ -28,7 +28,7 @@ pipeline {
             }
         }      
 
-/*         stage("Get Third Parties") {
+        stage("Get Third Parties") {
              steps {
                  getThirdParties('1.0.0')
              }
@@ -41,7 +41,7 @@ pipeline {
                     sh "make"
                 }
             }
-        } */
+        }
 
         stage("Release") {
             steps {
