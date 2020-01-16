@@ -34,6 +34,7 @@ pipeline {
 
         stage("Release") {
             steps {
+                sh "make install"
                 prepareRelease("thirdParties","linux-gcc","fbow")
             }
         }        
