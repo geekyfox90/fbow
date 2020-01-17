@@ -44,7 +44,7 @@ pipeline {
                     )
                     version = version.replace("\n","")
                 }
-                prepareRelease("thirdParties","linux-gcc","fbowSolar")
+                prepareRelease("thirdParties","linux-gcc","fbowSolAR")
                 withCredentials([string(credentialsId: 'github-token', variable: 'token')]) {
                     release("fbow","fbow/${version}/linux","${WORKSPACE}/artifactory/x86_64_shared_release/fbowSolAR_${version}_x86_64_shared_release.zip",token);
                 }
