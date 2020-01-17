@@ -20,7 +20,10 @@ pipeline {
         }
 
         stage("Get Third Parties") {
-             steps {def version
+             steps {
+                 getThirdParties('1.0.0')
+             }
+        }
 
         stage("Build") {
             steps {
@@ -33,7 +36,10 @@ pipeline {
 
         stage("Release") {
             steps {
-                sh "make install"def version*.pro  | grep VERSION | head -1 | cut -d '=' -f 2",
+                sh "make install"
+                script {
+                    version = sh (
+                        script: "cat *.pro  | grep VERSION | head -1 | cut -d '=' -f 2",
                         returnStdout: true
                     )
                     version = version.replace("\n","")
