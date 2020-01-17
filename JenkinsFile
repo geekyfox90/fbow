@@ -40,7 +40,7 @@ pipeline {
                     script: "cat *.pro  | grep VERSION | head -1 | cut -d '=' -f 2",
                     returnStdout: true
                 )
-                version = version.replace("\n","";)
+                version = version.replace("\n","")
                 withCredentials([string(credentialsId: 'github-token', variable: 'token')]) {
                     release("fbow","fbow/${version}/linux",token);
                 }
