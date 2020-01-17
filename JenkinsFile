@@ -1,3 +1,5 @@
+def version
+
 pipeline {
     agent {
         label "jenkins-slave-argo-qmake"
@@ -18,10 +20,7 @@ pipeline {
         }
 
         stage("Get Third Parties") {
-             steps {
-                 getThirdParties('1.0.0')
-             }
-        }
+             steps {def version
 
         stage("Build") {
             steps {
@@ -34,10 +33,7 @@ pipeline {
 
         stage("Release") {
             steps {
-                sh "make install"
-                script {
-                    def version = sh (
-                        script: "cat *.pro  | grep VERSION | head -1 | cut -d '=' -f 2",
+                sh "make install"def version*.pro  | grep VERSION | head -1 | cut -d '=' -f 2",
                         returnStdout: true
                     )
                     version = version.replace("\n","")
