@@ -35,14 +35,15 @@ pipeline {
         stage("Release") {
             steps {
                 sh "make install"
-                prepareRelease("thirdParties","linux-gcc","fbowSolar")
-                version = sh (
+                def version = sh (
                     script: "cat *.pro  | grep VERSION | head -1 | cut -d '=' -f 2",
                     returnStdout: true
                 )
-                tag = version.replace("\n","")
+                version = version.replace("\n","")
+                prepareRelease("thirdParties","linux-gcc","fbowSolar")
+             
                 withCredentials([string(credentialsId: 'github-token', variable: 'token')]) {
-                    release("fbow","fbow/${tag}/linux",token);
+                    release("fbow","fbow/${version}/linux",token);
                 }
             }
         }        
