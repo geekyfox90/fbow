@@ -33,6 +33,7 @@ pipeline {
                 withEnv(['REMAKEN_RULES_ROOT=/home/jenkins/.remaken/rules/']) {
                     sh "qmake fbow.pro"
                     sh "make"
+                    sh "make install"
                 }
             }
         }
@@ -55,7 +56,6 @@ pipeline {
                 expression { params.RELEASE == true }
             }            
             steps {
-                sh "make install"
                 script {
                     version = sh (
                         script: "cat *.pro  | grep VERSION | head -1 | cut -d '=' -f 2",
