@@ -10,6 +10,9 @@ pipeline {
     parameters {
         gitParameter branchFilter: 'origin/(.*)', type: 'PT_BRANCH', selectedValue: 'DEFAULT',
                 name: 'BRANCH', defaultValue: 'develop', useRepository: '.*fbow.git'
+        booleanParam(name: 'RELEASE',
+            defaultValue: false,
+            description: 'Create a Release')                
     }
     stages {
 
@@ -34,7 +37,23 @@ pipeline {
             }
         }
 
+        stage("Build Debug") {
+            when {
+                expression { params.RELEASE == true }
+            }              
+            steps {
+                withEnv(['REMAKEN_RULES_ROOT=/home/jenkins/.remaken/rules/']) {
+                    sh "qmake fbow.pro CONFIG+=debug"
+                    sh "make"
+                    sh "make install"
+                }
+            }
+        }        
+
         stage("Release") {
+            when {
+                expression { params.RELEASE == true }
+            }            
             steps {
                 sh "make install"
                 script {
@@ -46,7 +65,7 @@ pipeline {
                 }
                 prepareRelease("thirdParties","linux-gcc","fbowSolAR")
                 withCredentials([string(credentialsId: 'github-token', variable: 'token')]) {
-                    release("fbow","fbow/${version}/linux","${WORKSPACE}/artifactory/x86_64_shared_release/fbowSolAR_${version}_x86_64_shared_release.zip",token);
+                    release("fbow","fbow/${version}/linux","${WORKSPACE}/artifactory/x86_64_shared_release/fbowSolAR_${version}_x86_64_shared_release.zip ${WORKSPACE}/artifactory/x86_64_shared_debug/fbowSolAR_${version}_x86_64_shared_debug.zip",token);
                 }
             }
         }        
