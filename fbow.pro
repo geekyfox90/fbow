@@ -8,7 +8,7 @@ CONFIG -= qt
 ## global defintions : target lib name, version
 INSTALLSUBDIR = thirdParties
 TARGET = fbow
-FRAMEWORK = $$TARGET
+FRAMEWORK = fbowSolar
 VERSION=0.0.1
 
 DEFINES += MYVERSION=$${VERSION}
